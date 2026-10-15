@@ -1,7 +1,7 @@
 # alertmanager2es
 
-[![license](https://img.shields.io/github/license/webdevops/alertmanager2es.svg)](https://github.com/webdevops/alertmanager2es/blob/master/LICENSE)
-[![DockerHub](https://img.shields.io/badge/DockerHub-schmiddim%2Falertmanager2es-blue)](https://hub.docker.com/r/schmiddim/alertmanager2es/)
+[![license](https://img.shields.io/github/license/reschandreas/alertmanager2es.svg)](https://github.com/reschandreas/alertmanager2es/blob/master/LICENSE)
+[![DockerHub](https://img.shields.io/badge/ghcr.io-reschandreas%2Falertmanager2es-blue)](https://github.com/reschandreas/alertmanager2es/pkgs/container/alertmanager2es)
 
 [//]: # ([![Quay.io]&#40;https://img.shields.io/badge/Quay.io-webdevops%2Falertmanager2es-blue&#41;]&#40;https://quay.io/repository/webdevops/alertmanager2es&#41;)
 
