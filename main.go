@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	elasticsearch "github.com/elastic/go-elasticsearch/v7"
+	"github.com/elastic/elastic-transport-go/v8/elastictransport"
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/jessevdk/go-flags"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -40,16 +41,20 @@ func main() {
 	exporter := &AlertmanagerElasticsearchExporter{}
 	exporter.Init()
 
-	cfg := elasticsearch.Config{
-		Addresses: opts.Elasticsearch.Addresses,
-		Username:  opts.Elasticsearch.Username,
-		Password:  opts.Elasticsearch.Password,
-		APIKey:    opts.Elasticsearch.ApiKey,
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		},
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	transport.Proxy = http.ProxyFromEnvironment
+
+	options := []elasticsearch.Option{
+		elasticsearch.WithAddresses(opts.Elasticsearch.Addresses...),
+		elasticsearch.WithBasicAuth(opts.Elasticsearch.Username, opts.Elasticsearch.Password),
+		elasticsearch.WithAPIKey(opts.Elasticsearch.ApiKey),
+		elasticsearch.WithTransportOptions(
+			elastictransport.WithTransport(transport),
+		),
 	}
-	exporter.ConnectElasticsearch(cfg, opts.Elasticsearch.Index)
+
+	exporter.ConnectElasticsearch(options, opts.Elasticsearch.Index)
 
 	// daemon mode
 	log.Infof("starting http server on %s", opts.ServerBind)
