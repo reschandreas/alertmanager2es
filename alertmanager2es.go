@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	elasticsearch "github.com/elastic/go-elasticsearch/v7"
-	"github.com/elastic/go-elasticsearch/v7/esapi"
+	elasticsearch "github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9/esapi"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 )
@@ -104,9 +104,9 @@ func (e *AlertmanagerElasticsearchExporter) Init() {
 	prometheus.MustRegister(e.prometheus.alertsSuccessful)
 }
 
-func (e *AlertmanagerElasticsearchExporter) ConnectElasticsearch(cfg elasticsearch.Config, indexName string) {
+func (e *AlertmanagerElasticsearchExporter) ConnectElasticsearch(cfg []elasticsearch.Option, indexName string) {
 	var err error
-	e.elasticSearchClient, err = elasticsearch.NewClient(cfg)
+	e.elasticSearchClient, err = elasticsearch.New(cfg...)
 	if err != nil {
 		panic(err)
 	}

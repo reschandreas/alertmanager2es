@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	elasticsearch "github.com/elastic/go-elasticsearch/v7"
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -76,7 +76,7 @@ func newTestExporter(t *testing.T, handler http.Handler) *AlertmanagerElasticsea
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	client, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+	client, err := elasticsearch.New(elasticsearch.WithAddresses(server.URL))
 	if err != nil {
 		t.Fatalf("create elasticsearch client: %v", err)
 	}
