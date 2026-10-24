@@ -87,7 +87,7 @@ To use alertmanager2es, you'll need:
 To build alertmanager2es, you'll need:
 
 - [Make][]
-- [Go][] 1.14 or above
+- [Go][] 1.27.3 or above
 - a working [GOPATH][]
 
 [Make]: https://www.gnu.org/software/make/
@@ -136,55 +136,58 @@ By omitting a matcher, this route will match all alerts:
 Apply this Elasticsearch template before you configure alertmanager2es to start
 sending data:
 
+
 ```json
+
 {
-  "template": "alertmanager-2*",
-  "settings": {
-    "number_of_shards": 1,
-    "number_of_replicas": 1,
-    "index.refresh_interval": "10s",
-    "index.query.default_field": "groupLabels.alertname"
-  },
-  "mappings": {
-    "_default_": {
-      "_all": {
-        "enabled": false
-      },
-      "properties": {
-        "@timestamp": {
-          "type": "date",
-          "doc_values": true
+    "index_patterns": ["alertmanager-2*"],
+    "template": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1,
+            "index.refresh_interval": "10s",
+            "index.query.default_field": "groupLabels.alertname"
+        },
+        "mappings": {
+            "properties": {
+                "@timestamp": {
+                    "type": "date"
+                }
+            },
+            "dynamic_templates": [
+                {
+                    "string_fields": {
+                        "match": "*",
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 1024
+                        }
+                    }
+                }
+            ]
         }
-      },
-      "dynamic_templates": [
-        {
-          "string_fields": {
-            "match": "*",
-            "match_mapping_type": "string",
-            "mapping": {
-              "type": "string",
-              "index": "not_analyzed",
-              "ignore_above": 1024,
-              "doc_values": true
-            }
-          }
-        }
-      ]
     }
-  }
 }
+
+```
+
+```bash
+curl -X PUT "http://localhost:9200/_index_template/alertmanager-2" \
+  -H "Content-Type: application/json" \
+  -d @development/template.json
 ```
 
 We rotate our index once a month, since there's not enough data to warrant
-daily rotation in our case. Therefore our index name looks like:
+daily rotation in our case. Therefore, our index name looks like:
 
     alertmanager-2020.06
 
 ## Failure modes
 
-alertmanager2es will return a HTTP 500 (Internal Server Error) if it encounters
-a non-2xx response from Elasticsearch. Therefore if Elasticsearch is down,
-alertmanager2es will respond to Alertmanager with a HTTP 500. No retries are
+alertmanager2es will return an HTTP 500 (Internal Server Error) if it encounters
+a non-2xx response from Elasticsearch. Therefore, if Elasticsearch is down,
+alertmanager2es will respond to Alertmanager with an HTTP 500. No retries are
 made as Alertmanager has its own retry logic.
 
 Both the HTTP server exposed by alertmanager2es and the HTTP client that
@@ -202,7 +205,7 @@ alertmanager2es exposes [Prometheus][] metrics on `/metrics`.
 
 ## Example Alertmanager Payload
 ```
-curl -d example.json http://192.168.178.25:9097/webhook#
+curl -d example.json http://localhost:9097/webhook#
 ```
 
 ## Contributions
@@ -210,4 +213,4 @@ curl -d example.json http://192.168.178.25:9097/webhook#
 Pull requests, comments and suggestions are welcome.
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
-  
+

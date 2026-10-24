@@ -1,0 +1,220 @@
+name: test
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+  integration:
+    name: integration test (compose stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build alertmanager2es
+        run: make build
+
+      - name: Validate compose file
+        run: docker compose -f development/docker-compose.yaml config >/dev/null
+
+      - name: Raise vm.max_map_count for Elasticsearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Start stack
+        uses: hoverkraft-tech/compose-action@b659c744ee9bed25aea2307c017ad849bd104433 # v3.2.0
+        with:
+          compose-file: ./development/docker-compose.yaml
+          # Kibana is only needed for manual UI work and is omitted here.
+          services: |
+            elasticsearch
+            es-init
+            alertmanager
+            prometheus
+
+      - name: Wait for Elasticsearch
+        run: |
+          set -euo
+
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null; then
+              echo "Elasticsearch is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose -f development/docker-compose.yaml logs --no-color elasticsearch
+          exit 1
+
+      - name: Wait for index template
+        run: |
+          set -euo
+
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://localhost:9200/_index_template/alertmanager-2 >/dev/null; then
+              echo "Index template is installed"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose -f development/docker-compose.yaml logs --no-color es-init
+          exit 1
+
+      - name: Start alertmanager2es
+        env:
+          ELASTICSEARCH_ADDRESS: http://localhost:9200
+          SERVER_BIND: 0.0.0.0:9097
+        run: |
+          set -euo
+
+          nohup ./alertmanager2es >alertmanager2es.log 2>&1 &
+          echo $! >alertmanager2es.pid
+
+      - name: Wait for alertmanager2es
+        run: |
+          set -euo
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:9097/healthz >/dev/null; then
+              echo "alertmanager2es is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat alertmanager2es.log
+          exit 1
+
+      - name: Wait for Alertmanager
+        run: |
+          set -euo
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://localhost:9093/-/ready >/dev/null; then
+              echo "Alertmanager is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker compose -f development/docker-compose.yaml logs --no-color alertmanager
+          exit 1
+
+      - name: Verify Prometheus is evaluating alerts
+        run: |
+          set -euo
+
+          count=0
+          for attempt in $(seq 1 60); do
+            count=$(curl --silent --fail http://localhost:9090/api/v1/alerts | jq --raw-output '[.data.alerts[] | select(.state == "firing")] | length' || echo 0)
+            if [ "${count}" -gt 0 ]; then
+              echo "Prometheus has ${count} firing alerts"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          curl --silent http://localhost:9090/api/v1/alerts || true
+          docker compose -f development/docker-compose.yaml logs --no-color prometheus
+          exit 1
+
+      - name: Send alert to Alertmanager
+        run: |
+          set -euo
+
+          payload=$(jq --null-input \
+            --arg startsAt "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" \
+            '[{
+              labels: {alertname: "ci-stack-test", severity: "warning", team: "ci"},
+              annotations: {summary: "compose stack test"},
+              startsAt: $startsAt
+            }]')
+
+          curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "${payload}" \
+            http://localhost:9093/api/v2/alerts
+
+      - name: Verify alert reached Elasticsearch
+        run: |
+          set -euo
+
+          index_pattern='alertmanager-*'
+          query='{"query":{"match":{"Alert.labels.alertname":"ci-stack-test"}}}'
+
+          count=0
+          for attempt in $(seq 1 90); do
+            curl --silent --fail --request POST "http://localhost:9200/${index_pattern}/_refresh" >/dev/null || true
+            count=$(curl --silent --fail \
+              --header 'Content-Type: application/json' \
+              --data "${query}" \
+              "http://localhost:9200/${index_pattern}/_count" | jq --raw-output '.count' || echo 0)
+            if [ "${count}" -ge 1 ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "indexed ci-stack-test documents: ${count}"
+          test "${count}" -ge 1
+
+          curl --silent --fail \
+            --header 'Content-Type: application/json' \
+            --data '{"size":1,"query":{"match":{"Alert.labels.alertname":"ci-stack-test"}}}' \
+            "http://localhost:9200/${index_pattern}/_search" |
+            jq --exit-status '
+              .hits.hits[0]._source
+              | (.version == "4")
+                and (.Alert.labels.alertname == "ci-stack-test")
+                and (.Alert.labels.team == "ci")
+                and (.receiver == "default")
+                and (has("@timestamp"))
+            ' >/dev/null
+
+      - name: Verify metrics
+        run: |
+          set -euo
+
+          curl --silent --fail http://127.0.0.1:9097/metrics |
+            grep --extended-regexp '^alertmanager2es_alerts_successful [1-9][0-9]*$'
+
+      - name: Dump stack logs
+        if: failure()
+        run: |
+          cat alertmanager2es.log || true
+          docker compose -f development/docker-compose.yaml logs --no-color --tail=200 || true

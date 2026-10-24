@@ -1,11 +1,7 @@
-version: '3.4'
 services:
-
-  ###########################
-  # ElasticSearch
-  ###########################
+  # Elasticsearch node 1
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.2.2
+    image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:9.5.5
     container_name: es01
     environment:
       - node.name=es01
@@ -13,49 +9,106 @@ services:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms2g -Xmx2g
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
+    networks:
+      - elastic
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
-  ###########################
+  # One-shot bootstrap: apply the index template once the cluster is up.
+  es-init:
+    image: curlimages/curl:8.23.0
+    container_name: es-init
+    restart: "no"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - --fail
+      - --silent
+      - --show-error
+      - --retry
+      - "30"
+      - --retry-delay
+      - "2"
+      - --retry-connrefused
+      - --request
+      - PUT
+      - http://elasticsearch:9200/_index_template/alertmanager-2
+      - --header
+      - "Content-Type: application/json"
+      - --data-binary
+      - "@/template.json"
+    volumes:
+      - ./template.json:/template.json:ro
+    networks:
+      - elastic
+
   # Kibana
-  ###########################
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.2.2
+    image: docker.elastic.co/kibana/kibana-wolfi:9.5.5
     container_name: kibana
     environment:
       SERVER_NAME: kibana
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      es-init:
+        condition: service_completed_successfully
+    healthcheck:
+        test: ["CMD-SHELL", "curl -fsS 'http://localhost:5601/api/status' >/dev/null || exit 1"]
+        interval: 10s
+        timeout: 5s
+        retries: 30
+        start_period: 60s
+    networks:
+      - elastic
 
-  ###########################
-  # PROMETHEUS
-  ###########################
+  # Prometheus
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v3.15.1
+    container_name: prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention=600d"
       - "--storage.tsdb.path=/prometheus"
       - "--web.external-url=http://prometheus.admin.achenar.net"
       - "--web.enable-lifecycle"
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./etc/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./etc/prometheus.alerts.yaml:/etc/prometheus/prometheus.alerts.yaml:ro
+    depends_on:
+        alertmanager:
+            condition: service_started
+    networks:
+      - elastic
 
-  ###########################
-  # ALERTMANGER
-  ###########################
+  # Alertmanager
   alertmanager:
-    image: prom/alertmanager
+    image: prom/alertmanager:v0.34.1
+    container_name: alertmanager
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     volumes:
       - ./etc/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro
+    # Makes host.docker.internal work on Linux as well as Docker Desktop.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - elastic
+
+networks:
+  elastic:
+    driver: bridge

@@ -1,0 +1,31 @@
+
+{
+    "index_patterns": ["alertmanager-2*"],
+    "template": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1,
+            "index.refresh_interval": "10s",
+            "index.query.default_field": "groupLabels.alertname"
+        },
+        "mappings": {
+            "properties": {
+                "@timestamp": {
+                    "type": "date"
+                }
+            },
+            "dynamic_templates": [
+                {
+                    "string_fields": {
+                        "match": "*",
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 1024
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
