@@ -10,7 +10,10 @@ alerting:
         - targets:
             - alertmanager:9093
       path_prefix: /
-
+storage:
+    tsdb:
+        retention:
+            time: 600d
 
 #############################
 # Misc
