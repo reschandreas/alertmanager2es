@@ -28,10 +28,6 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-      elasticsearch2:
-        condition: service_healthy
-      elasticsearch3:
-        condition: service_healthy
     command:
       - --fail
       - --silent
@@ -91,8 +87,8 @@ services:
       - ./etc/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./etc/prometheus.alerts.yaml:/etc/prometheus/prometheus.alerts.yaml:ro
     depends_on:
-        kibana:
-            condition: service_healthy
+        alertmanager:
+            condition: service_started
     networks:
       - elastic
 
@@ -110,9 +106,6 @@ services:
     # Makes host.docker.internal work on Linux as well as Docker Desktop.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-        kibana:
-            condition: service_healthy
     networks:
       - elastic
 
