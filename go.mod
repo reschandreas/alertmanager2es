@@ -3,7 +3,7 @@ module github.com/webdevops/alertmanager2es
 go 1.27.3
 
 require (
-	github.com/elastic/go-elasticsearch/v7 v7.17.10
+	github.com/elastic/go-elasticsearch/v9 v9.5.2
 	github.com/elastic/go-elasticsearch/v9 v9.5.2
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/prometheus/client_golang v1.25.0
