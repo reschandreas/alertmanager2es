@@ -30,7 +30,7 @@ image: build
 
 build-push-development:
 	docker buildx create --use
-	docker buildx build -t webdevops/$(PROJECT_NAME):development --platform linux/amd64,linux/arm,linux/arm64 --push .
+	docker buildx build -t reschandreas/$(PROJECT_NAME):development --platform linux/amd64,linux/arm,linux/arm64 --push .
 
 .PHONY: test
 test:
@@ -52,7 +52,7 @@ gosec: $(GOSEC_BIN)
 	$(GOSEC_BIN) ./...
 
 $(GOLANGCI_LINT_BIN):
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(FIRST_GOPATH)/bin
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/main/install.sh | sh -s -- -b $(FIRST_GOPATH)/bin
 
 $(GOSEC_BIN):
-	curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(FIRST_GOPATH)/bin
+	curl -sfL https://raw.githubusercontent.com/securego/gosec/main/install.sh | sh -s -- -b $(FIRST_GOPATH)/bin

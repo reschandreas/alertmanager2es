@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -66,15 +67,16 @@ func initArgparser() {
 	argparser = flags.NewParser(&opts, flags.Default)
 	_, err := argparser.Parse()
 
-	// check if there is an parse error
+	// check if there is a parse error
 	if err != nil {
-		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+		var flagsErr *flags.Error
+		if errors.As(err, &flagsErr) && errors.Is(flagsErr.Type, flags.ErrHelp) {
 			os.Exit(0)
-		} else {
-			fmt.Println()
-			argparser.WriteHelp(os.Stdout)
-			os.Exit(1)
 		}
+
+		fmt.Println()
+		argparser.WriteHelp(os.Stdout)
+		os.Exit(1)
 	}
 
 	// verbose level

@@ -35,6 +35,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute Tag
+        uses: actions/github-script@v9
+        id: compute-tag
+        with:
+          result-encoding: string
+          script: |
+            if (context.eventName === "pull_request") {
+              return "pr-" + context.issue.number;
+            }
+            if (context.eventName === "release") {
+              return "latest";
+            }
+            if (context.eventName === "push") {
+              if (context.ref.startsWith("refs/tags/")) {
+                return context.ref.slice(10);
+              }
+              if (context.ref === "refs/heads/main") {
+                return "nightly";
+              }
+            }
+            return "FALSE";
       - name: Extract metadata (tags, labels) for Docker
         uses: docker/metadata-action@v6
         id: meta
@@ -43,11 +64,13 @@ jobs:
           tags: |
             type=raw,value={{date 'YYYYMMDD-hhmmss' tz='Europe/Berlin'}}
             type=sha
-            type=raw,value=${{ steps.metadata.outputs.commit_id }}
-
+            type=raw,value=${{steps.compute-tag.outputs.result}}
+            type=raw,value=${{ steps.meta.outputs.commit_id }}
+            type=raw,value=nightly,enable={{is_default_branch}}
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
+          context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.ref_name == github.event.repository.default_branch }}
           tags: ${{ steps.meta.outputs.tags }}

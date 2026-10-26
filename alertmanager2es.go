@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	elasticsearch "github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/elastic/go-elasticsearch/v9/esapi"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -118,11 +118,11 @@ func (e *AlertmanagerElasticsearchExporter) ConnectElasticsearch(cfg []elasticse
 			tries++
 			if tries >= 5 {
 				panic(err)
-			} else {
-				log.Info("Failed to connect to ES, retry...")
-				time.Sleep(5 * time.Second)
-				continue
 			}
+
+			log.Info("Failed to connect to ES, retry...")
+			time.Sleep(5 * time.Second)
+			continue
 		}
 
 		break
@@ -164,7 +164,12 @@ func (e *AlertmanagerElasticsearchExporter) HttpHandler(w http.ResponseWriter, r
 		log.Error(err)
 		return
 	}
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Error(err)
+		}
+	}(r.Body)
 
 	var msg AlertmanagerEntry
 	err = json.Unmarshal(b, &msg)
@@ -183,7 +188,7 @@ func (e *AlertmanagerElasticsearchExporter) HttpHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// continue her with for on ElasticSearchEntry
+	// continue here with for on ElasticSearchEntry
 	// incidentJson, _ := json.Marshal(msg)
 
 	for _, s := range msg.Alerts {

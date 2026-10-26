@@ -15,7 +15,7 @@ RUN go mod download
 # Compile
 COPY . .
 RUN make test
-RUN CGO_ENABLED=0 make build
+RUN make build
 
 #############################################
 # Test
