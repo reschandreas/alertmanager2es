@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/elastic/elastic-transport-go/v8 v8.11.0
-	github.com/elastic/go-elasticsearch/v9 v9.5.2
+	github.com/elastic/go-elasticsearch/v9 v9.5.3
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
